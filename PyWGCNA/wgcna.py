@@ -240,7 +240,7 @@ class WGCNA(GeneExp):
         if show:
             plt.figure(figsize=(max(25, round(self.datExpr.X.shape[0] / 20)), 10), facecolor='white')
             dendrogram(sampleTree, color_threshold=self.cut, labels=self.datExpr.to_df().index, leaf_rotation=90,
-                       leaf_font_size=8)
+                       leaf_font_size=12)
             plt.axhline(y=self.cut, c='grey', lw=1, linestyle='dashed')
             plt.title('Sample clustering to detect outliers')
             plt.xlabel('Samples')
@@ -276,24 +276,28 @@ class WGCNA(GeneExp):
                                                        MeanCut=self.MeanCut, powerVector=self.powers,
                                                        networkType=self.networkType, **kwargs)
 
+        font_size = 12
+
         fig, ax = plt.subplots(ncols=2, figsize=(10, 5), facecolor='white')
         ax[0].plot(self.sft['Power'], -1 * np.sign(self.sft['slope']) * self.sft['SFT.R.sq'], 'o')
         for i in range(len(self.powers)):
             ax[0].text(self.sft.loc[i, 'Power'],
-                       -1 * np.sign(self.sft.loc[i, 'slope']) * self.sft.loc[i, 'SFT.R.sq'],
-                       str(self.sft.loc[i, 'Power']), ha="center", va="center", color='black', weight='bold')
+                    -1 * np.sign(self.sft.loc[i, 'slope']) * self.sft.loc[i, 'SFT.R.sq'],
+                    str(self.sft.loc[i, 'Power']), ha="center", va="center", color='black', weight='bold', fontsize=font_size)
         ax[0].axhline(0.9, color='r')
-        ax[0].set_xlabel("Soft Threshold (power)")
-        ax[0].set_ylabel("Scale Free Topology Model Fit,signed R^2")
+        ax[0].set_xlabel("Soft Threshold (power)", fontsize=font_size)
+        ax[0].set_ylabel("Scale Free Topology Model Fit, signed R^2", fontsize=font_size)
         ax[0].title.set_text('Scale independence')
+        ax[0].tick_params(axis='both', which='major', labelsize=font_size)
 
         ax[1].plot(self.sft['Power'], self.sft['mean(k)'], 'o')
         for i in range(len(self.powers)):
             ax[1].text(self.sft.loc[i, 'Power'], self.sft.loc[i, 'mean(k)'],
-                       str(self.sft.loc[i, 'Power']), ha="center", va="center", color='r', weight='bold')
-        ax[1].set_xlabel("Soft Threshold (power)")
-        ax[1].set_ylabel("Mean Connectivity")
+                    str(self.sft.loc[i, 'Power']), ha="center", va="center", color='r', weight='bold', fontsize=font_size)
+        ax[1].set_xlabel("Soft Threshold (power)", fontsize=font_size)
+        ax[1].set_ylabel("Mean Connectivity", fontsize=font_size)
         ax[1].title.set_text('Mean connectivity')
+        ax[1].tick_params(axis='both', which='major', labelsize=font_size)
 
         fig.tight_layout()
         if self.save:
@@ -353,7 +357,7 @@ class WGCNA(GeneExp):
 
             plt.figure(figsize=(max(20, round(MEDiss.shape[1] / 20)), 10), facecolor='white')
             dendrogram(METree, color_threshold=self.MEDissThres, labels=MEDiss.columns, leaf_rotation=90,
-                       leaf_font_size=8)
+                       leaf_font_size=16)
             plt.axhline(y=self.MEDissThres, c='grey', lw=1, linestyle='dashed')
             plt.title('Clustering of module eigengenes')
             plt.xlabel('')
