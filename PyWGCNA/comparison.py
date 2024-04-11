@@ -1,6 +1,7 @@
 import math
 import sys
 
+import matplotlib
 import pandas as pd
 import numpy as np
 from scipy.stats import fisher_exact
@@ -448,8 +449,10 @@ class Comparison:
         handles = handles[entries_to_skip:]
         labels = labels[entries_to_skip:]
         for h in handles[1:]:
-            sizes = [s for s in h.get_sizes()]
-            h.set_sizes(sizes)
+            if isinstance(h, matplotlib.collections.PathCollection):
+                sizes = h.get_sizes()
+                h.set_sizes(sizes)
+
         labels = labels[:1] + [f'{float(lab):.2f}' for lab in labels[1:]]
         legend_size = ax.legend(handles, labels,
                                 title=bubble_size,
