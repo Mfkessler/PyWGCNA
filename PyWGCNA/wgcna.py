@@ -3688,35 +3688,45 @@ class WGCNA(GeneExp):
 
         sleep(1)
 
-    def top_n_hub_genes(self, moduleName, n=10):
+    def top_n_hub_genes(self, moduleName=None, n=10):
         """
-        find top n hub genes based on connectivity in given module
+        Function to find top n hub genes for specified module or a list of modules.
 
-        :param moduleName: name of module you want to top n hub genes
-        :type moduleName: str
+        :param moduleName: name of module(s) you want top n hub genes for, or None for all modules
+                        Can be a string (single module) or a list of strings (multiple modules).
+        :type moduleName: str or list of str or None
         :param n: number of top hub genes
         :type n: int
 
-        :return: dataframe contains top n hun genes along with connectivity score and additional gene information you added to your expression matrix
-        :rtype: pandas dataframe
+        :return: DataFrame containing top n hub genes along with connectivity score and additional gene information
+        :rtype: pandas DataFrame
         """
 
-        modules = np.unique(self.datExpr.var['moduleColors']).tolist()
-        if np.all(moduleName not in modules):
-            print(f"{WARNING}Module name does not exist in {ENDC}")
-            return
-
         datExpr = self.datExpr.copy()
-        datExpr = datExpr[:, datExpr.var['moduleColors'] == moduleName]
-        adj = WGCNA.adjacency(datExpr.to_df(), power=self.power, adjacencyType=self.networkType, verbose=False)
-        adj = pd.DataFrame(adj,
-                           columns=datExpr.to_df().columns,
-                           index=datExpr.to_df().columns)
-        hub_genes = adj.sum().sort_values(ascending=False)
-        hub_genes = pd.DataFrame(hub_genes,
-                                 columns=["connectivity"])
+        all_modules = np.unique(datExpr.var['moduleColors']).tolist()
 
-        hub_genes = pd.concat([hub_genes, datExpr.var], axis=1)
-        hub_genes = hub_genes.iloc[:n, :]
+        # Determine which modules to process
+        if isinstance(moduleName, str):
+            modules_to_process = [moduleName] if moduleName in all_modules else []
+        elif isinstance(moduleName, list):
+            modules_to_process = [mod for mod in moduleName if mod in all_modules]
+        else:
+            modules_to_process = all_modules  # None was provided, process all modules
 
-        return hub_genes
+        # Check if any valid module names are given
+        if not modules_to_process:
+            print("WARNING: No valid module names provided")
+            return None
+
+        top_genes_per_module = {}
+
+        for module in modules_to_process:
+            module_data = datExpr[:, datExpr.var['moduleColors'] == module]
+            adj = WGCNA.adjacency(module_data.to_df(), power=self.power, adjacencyType=self.networkType, verbose=False)
+            adj = pd.DataFrame(adj, columns=module_data.to_df().columns, index=module_data.to_df().columns)
+            hub_genes = adj.sum().sort_values(ascending=False)
+            hub_genes = pd.DataFrame(hub_genes, columns=["connectivity"])
+            hub_genes = pd.concat([hub_genes, module_data.var], axis=1).head(n)
+            top_genes_per_module[module] = hub_genes
+
+        return pd.concat(top_genes_per_module, keys=modules_to_process)
