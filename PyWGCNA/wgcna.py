@@ -1042,7 +1042,7 @@ class WGCNA(GeneExp):
 
     @staticmethod
     def adjacency(datExpr, selectCols=None, adjacencyType="unsigned", power=6, corOptions=pd.DataFrame(), weights=None,
-                  weightArgNames=None):
+                  weightArgNames=None, verbose=True):
         """
         Calculates (correlation or distance) network adjacency from given expression data or from a similarity
 
@@ -1060,11 +1060,14 @@ class WGCNA(GeneExp):
         :type weights: pandas dataframe
         :param weightArgNames: character list of length 2 giving the names of the arguments to corFnc that represent weights for variable x and y. Only used if weights are non-NULL.
         :type weightArgNames: list
+        :param verbose: logical indicating whether verbose output should be generated. (default = TRUE)
+        :type verbose: bool
 
         :return: Adjacency matrix
         :rtype: pandas dataframe
         """
-        print(f"{OKCYAN}calculating adjacency matrix ...{ENDC}")
+        if verbose:
+            print(f"{OKCYAN}calculating adjacency matrix ...{ENDC}")
         if weightArgNames is None:
             weightArgNames = ["weights.x", "weights.y"]
         intType = adjacencyTypes.index(adjacencyType)
@@ -1103,7 +1106,8 @@ class WGCNA(GeneExp):
         elif intType == 2:
             cor_mat[cor_mat < 0] = 0
 
-        print("\tDone..\n")
+        if verbose:
+            print("\tDone..\n")
 
         return cor_mat ** power
 
@@ -3704,7 +3708,7 @@ class WGCNA(GeneExp):
 
         datExpr = self.datExpr.copy()
         datExpr = datExpr[:, datExpr.var['moduleColors'] == moduleName]
-        adj = WGCNA.adjacency(datExpr.to_df(), power=self.power, adjacencyType=self.networkType)
+        adj = WGCNA.adjacency(datExpr.to_df(), power=self.power, adjacencyType=self.networkType, verbose=False)
         adj = pd.DataFrame(adj,
                            columns=datExpr.to_df().columns,
                            index=datExpr.to_df().columns)
