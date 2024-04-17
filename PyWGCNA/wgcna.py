@@ -3509,8 +3509,17 @@ class WGCNA(GeneExp):
         title = nodes.index.tolist()
         for i in range(nodes.shape[0]):
             for j in range(nodes.shape[1]):
-                if not pd.isna(nodes.iloc[i, j]):
-                    title[i] = title[i] + "\n" + str(nodes.columns[j]) + ": " + str(nodes.iloc[i, j])
+                # Accessing the element at (i, j) and ensuring it's not an array
+                element = nodes.iloc[i, j]
+                if isinstance(element, list) or isinstance(element, np.ndarray):
+                    # If it's an array, check if all its items are NaN
+                    if not pd.isna(element).all():
+                        title[i] = title[i] + "\n" + str(nodes.columns[j]) + ": " + ', '.join(map(str, element))
+                else:
+                    # If it's a single element, proceed as before
+                    if not pd.isna(element):
+                        title[i] = title[i] + "\n" + str(nodes.columns[j]) + ": " + str(element)
+
 
         net.add_nodes(nodes.index.tolist(),
                       title=title,
