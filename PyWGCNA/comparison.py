@@ -1,6 +1,5 @@
 import math
 import sys
-
 import matplotlib
 import pandas as pd
 import numpy as np
@@ -9,6 +8,7 @@ import matplotlib.pyplot as plt
 import pickle
 import seaborn as sns
 import networkx as nx
+from multiprocessing import Pool
 from matplotlib import cm
 from matplotlib.colors import ListedColormap
 from matplotlib.lines import Line2D
@@ -26,6 +26,14 @@ ENDC = "\033[0m"
 BOLD = "\033[1m"
 UNDERLINE = "\033[4m"
 
+def calculate_p_value(pair):
+    network1, module1, list1, network2, module2, list2, nGenes, fraction = pair
+    number = fraction * len(list2) / 100
+    table = np.array(
+        [[nGenes - len(list1) - len(list2) + number, len(list1) - number],
+         [len(list2) - number, number]])
+    _, p = fisher_exact(table, alternative='two-sided')
+    return (f"{network1}:{module1}", f"{network2}:{module2}"), p
 
 class Comparison:
     """
@@ -51,37 +59,33 @@ class Comparison:
 
     def calculateJaccardSimilarity(self):
         """
-        Calculate jaccard similarity matrix along multiple networks
-
+        Calculate Jaccard similarity matrix along multiple networks
         :return: dataframe containing jaccard similarity between all modules in all PyWGCNA objects
         :rtype: pandas dataframe
         """
-        num = 0
         names = []
-        for network in self.geneModules.keys():
-            num = num + len(self.geneModules[network].moduleColors.unique())
-            tmp = [f"{network}:" + s for s in self.geneModules[network].moduleColors.unique().tolist()]
-            names = names + tmp
+        module_sets = {}
+        for network, data in self.geneModules.items():
+            modules = data.moduleColors.unique()
+            for module in modules:
+                module_name = f"{network}:{module}"
+                names.append(module_name)
+                module_sets[module_name] = set(data.index[data.moduleColors == module])
+
         jaccard_similarity = pd.DataFrame(0.0, columns=names, index=names)
 
-        for network1 in self.geneModules.keys():
-            for network2 in self.geneModules.keys():
-                if network1 != network2:
-                    modules1 = self.geneModules[network1].moduleColors.unique().tolist()
-                    modules2 = self.geneModules[network2].moduleColors.unique().tolist()
-                    for module1 in modules1:
-                        for module2 in modules2:
-                            list1 = self.geneModules[network1].index[
-                                self.geneModules[network1].moduleColors == module1].tolist()
-                            list2 = self.geneModules[network2].index[
-                                self.geneModules[network2].moduleColors == module2].tolist()
-                            jaccard_similarity.loc[
-                                f"{network1}:{module1}", f"{network2}:{module2}"] = PyWGCNA.Comparison.jaccard(list1,
-                                                                                                               list2)
+        for i, name1 in enumerate(names):
+            print(f"Calculating jaccard similarity matrix... {i}/{len(names)}", end="\r")
+            set1 = module_sets[name1]
+            for name2 in names[i:]:
+                set2 = module_sets[name2]
+                if set1 == set2:
+                    jaccard_similarity.at[name1, name2] = 1.0
                 else:
-                    modules = self.geneModules[network1].moduleColors.unique().tolist()
-                    for module in modules:
-                        jaccard_similarity.loc[f"{network1}:{module}", f"{network1}:{module}"] = 1.0
+                    intersection = len(set1 & set2)
+                    union = len(set1 | set2)
+                    jaccard_similarity.at[name1, name2] = intersection / union if union != 0 else 0
+                    jaccard_similarity.at[name2, name1] = jaccard_similarity.at[name1, name2]
 
         self.jaccard_similarity = jaccard_similarity
 
@@ -124,47 +128,45 @@ class Comparison:
 
         return fraction
 
+    def calculate_p_value(pair):
+        network1, module1, list1, network2, module2, list2, nGenes, fraction = pair
+        number = fraction * len(list2) / 100
+        table = np.array(
+            [[nGenes - len(list1) - len(list2) + number, len(list1) - number],
+            [len(list2) - number, number]])
+        _, p = fisher_exact(table, alternative='two-sided')
+
+        return (f"{network1}:{module1}", f"{network2}:{module2}"), p
+
     def calculatePvalue(self):
-        """
-        Calculate pvalue of fraction along multiple networks
-
-        :return: dataframe containing pvalue between all modules in all netwroks
-        :rtype: pandas dataframe
-        """
-
-        num = 0
         names = []
-        for network in self.geneModules.keys():
-            num = num + len(self.geneModules[network].moduleColors.unique())
-            tmp = [f"{network}:" + s for s in self.geneModules[network].moduleColors.unique().tolist()]
-            names = names + tmp
+        module_lists = {}
+        genes = set()
+
+        for network, data in self.geneModules.items():
+            modules = data.moduleColors.unique()
+            names += [f"{network}:{module}" for module in modules]
+            module_lists[network] = {module: set(data.index[data.moduleColors == module]) for module in modules}
+            genes.update(data.index)
+
         pvalue = pd.DataFrame(0, columns=names, index=names)
-
-        genes = []
-        for network in self.geneModules.keys():
-            genes = genes + self.geneModules[network].index.tolist()
-
-        genes = list(set(genes))
         nGenes = len(genes)
 
-        for network1 in self.geneModules.keys():
-            for network2 in self.geneModules.keys():
+        pairs = []
+        for network1, modules1 in module_lists.items():
+            for network2, modules2 in module_lists.items():
                 if network1 != network2:
-                    modules1 = self.geneModules[network1].moduleColors.unique().tolist()
-                    modules2 = self.geneModules[network2].moduleColors.unique().tolist()
-                    for module1 in modules1:
-                        for module2 in modules2:
-                            list1 = self.geneModules[network1].index[
-                                self.geneModules[network1].moduleColors == module1].tolist()
-                            list2 = self.geneModules[network2].index[
-                                self.geneModules[network2].moduleColors == module2].tolist()
-                            number = self.fraction.loc[f"{network1}:{module1}", f"{network2}:{module2}"] * len(
-                                list2) / 100
-                            table = np.array(
-                                [[nGenes - len(list1) - len(list2) + number, len(list1) - number],
-                                 [len(list2) - number, number]])
-                            oddsr, p = fisher_exact(table, alternative='two-sided')
-                            pvalue.loc[f"{network1}:{module1}", f"{network2}:{module2}"] = p
+                    for module1, list1 in modules1.items():
+                        for module2, list2 in modules2.items():
+                            fraction_value = self.fraction.loc[f"{network1}:{module1}", f"{network2}:{module2}"]
+                            pairs.append((network1, module1, list1, network2, module2, list2, nGenes, fraction_value))
+
+        with Pool(processes=4) as pool:
+            results = pool.map(calculate_p_value, pairs)
+
+        for (name1, name2), p in results:
+            pvalue.loc[name1, name2] = p
+
         self.P_value = pvalue
 
         return pvalue
@@ -173,8 +175,11 @@ class Comparison:
         """
         compare Networks
         """
+        print(f"Calculating jaccard similarity matrix...")
         self.calculateJaccardSimilarity()
+        print(f"Calculating fraction matrix...")
         self.calculateFraction()
+        print(f"Calculating pvalue matrix...")
         self.calculatePvalue()
 
     def plotHeatmapComparison(self,
