@@ -61,6 +61,28 @@ def compareNetworks(PyWGCNAs):
     return compare
 
 
+def compareNetworks_adatas(adatas):
+    """
+    Compare several AnnData objects
+                
+    :param adatas: list of AnnData objects
+    :type adatas: list of anndata.AnnData
+
+    :return: compare object
+    :rtype: Compare class
+    """
+    geneModules = {}
+    for adata in adatas:
+        print(f"Reading {adata.uns['name']}...")
+        geneModules[adata.uns['name']] = adata.var
+
+    compare = Comparison(geneModules=geneModules)
+    print(f"Comparing networks...")
+    compare.compareNetworks()
+
+    return compare
+
+
 # compare WGCNA to single cell
 def compareSingleCell(PyWGCNAs, sc):
     """
