@@ -2793,34 +2793,25 @@ class WGCNA(GeneExp):
 
         return datTraits
 
-    def module_trait_relationships_heatmap(self,
-                                           metaData,
-                                           alternative='two-sided',
-                                           figsize=None,
-                                           show=True,
-                                           file_name='module-traitRelationships'):
+    def module_trait_relationships_heatmap(self, metaData, alternative='two-sided', figsize=None, show=True, file_name='module-traitRelationships'):
         """
-        plot topic-trait relationship heatmap
+        Plot topic-trait relationship heatmap.
 
-        :param metaData: traits you would like to see the relationship with topics (must be column name of datExpr.obs)
+        :param metaData: Traits you would like to see the relationship with topics (must be column name of datExpr.obs).
         :type metaData: list
-        :param alternative: Defines the alternative hypothesis for calculating correlation for module-trait relationship. Default is ‘two-sided’. The following options are available: 'two-sided’: the correlation is nonzero, ‘less’: the correlation is negative (less than zero), ‘greater’: the correlation is positive (greater than zero)
+        :param alternative: Defines the alternative hypothesis for calculating correlation for module-trait relationship. Default is ‘two-sided’. Options: 'two-sided’, ‘less’, ‘greater’.
         :type alternative: str
-        :param figsize: indicate the size of plot
+        :param figsize: Indicate the size of the plot.
         :type figsize: tuple of float
-        :param show: indicate if you want to show the plot or not (default: True)
+        :param show: Indicate if you want to show the plot or not (default: True).
         :type show: bool
-        :param file_name: name and path of the plot use for save (default: topic-traitRelationships)
+        :param file_name: Name and path of the plot for saving (default: topic-traitRelationships).
         :type file_name: str
         """
         datTraits = self.getDatTraits(metaData)
 
-        moduleTraitCor = pd.DataFrame(index=self.MEs.columns,
-                                      columns=datTraits.columns,
-                                      dtype="float")
-        moduleTraitPvalue = pd.DataFrame(index=self.MEs.columns,
-                                         columns=datTraits.columns,
-                                         dtype="float")
+        moduleTraitCor = pd.DataFrame(index=self.MEs.columns, columns=datTraits.columns, dtype="float")
+        moduleTraitPvalue = pd.DataFrame(index=self.MEs.columns, columns=datTraits.columns, dtype="float")
 
         for i in self.MEs.columns:
             for j in datTraits.columns:
@@ -2832,35 +2823,47 @@ class WGCNA(GeneExp):
             self.moduleTraitCor = moduleTraitCor
             self.moduleTraitPvalue = moduleTraitPvalue
 
+        num_modules = moduleTraitPvalue.shape[0]
+        num_traits = moduleTraitPvalue.shape[1]
+
         if figsize is None:
-            figsize = (max(20, int(moduleTraitPvalue.shape[0] * 1.5)),
-                       moduleTraitPvalue.shape[1] * 1.5)
+            figsize = (max(20, int(num_modules * 0.8)), num_traits * 0.8)
+
         fig, ax = plt.subplots(figsize=figsize, facecolor='white')
-        # names
-        xlabels = []
-        for label in self.MEs.columns:
-            xlabels.append(label[2:].capitalize() + '(' + str(sum(self.datExpr.var['moduleColors'] == label[2:])) + ')')
+
+        # Names
+        xlabels = [label[2:].capitalize() + '(' + str(sum(self.datExpr.var['moduleColors'] == label[2:])) + ')' for label in self.MEs.columns]
         ylabels = datTraits.columns
 
-        # Loop over data dimensions and create text annotations.
+        # Loop over data dimensions and create text annotations
         tmp_cor = moduleTraitCor.T.round(decimals=2)
         tmp_pvalue = moduleTraitPvalue.T.round(decimals=3)
-        labels = (np.asarray(["{0}\n({1})".format(cor, pvalue)
-                              for cor, pvalue in zip(tmp_cor.values.flatten(),
-                                                     tmp_pvalue.values.flatten())])) \
-            .reshape(moduleTraitCor.T.shape)
+        labels = (np.asarray(["{0}\n({1})".format(cor, pvalue) for cor, pvalue in zip(tmp_cor.values.flatten(), tmp_pvalue.values.flatten())])).reshape(moduleTraitCor.T.shape)
 
-        sns.set(font_scale=1.5)
+        font_scale = max(0.5, 1.5 / max(num_modules, num_traits))
+        annot_font_size = min(max(10, 300 / (num_modules + num_traits)), 15)
+        label_font_size = min(max(10, 300 / (num_modules + num_traits)), 20)
+        title_font_size = min(max(20, 500 / (num_modules + num_traits)), 30)
+        legend_font_size = min(max(10, 300 / num_traits), 15)
+
+        sns.set(font_scale=font_scale)
         res = sns.heatmap(moduleTraitCor.T, annot=labels, fmt="", cmap='RdBu_r',
-                          vmin=-1, vmax=1, ax=ax, annot_kws={'size': 20, "weight": "bold"},
-                          xticklabels=xlabels, yticklabels=ylabels)
-        res.set_xticklabels(res.get_xmajorticklabels(), fontsize=20, fontweight="bold", rotation=90)
-        res.set_yticklabels(res.get_ymajorticklabels(), fontsize=20, fontweight="bold")
+                        vmin=-1, vmax=1, ax=ax, annot_kws={'size': annot_font_size, "weight": "bold"},
+                        xticklabels=xlabels, yticklabels=ylabels)
+
+        res.set_xticklabels(res.get_xmajorticklabels(), fontsize=label_font_size, fontweight="bold", rotation=90)
+        res.set_yticklabels(res.get_ymajorticklabels(), fontsize=label_font_size, fontweight="bold")
         plt.yticks(rotation=0)
+
         ax.set_title(f"Module-trait Relationships heatmap for {self.name}",
-                     fontsize=30, fontweight="bold")
+                    fontsize=title_font_size, fontweight="bold")
         ax.set_facecolor('white')
+
+        cbar = ax.collections[0].colorbar
+        cbar.ax.tick_params(labelsize=legend_font_size)
+
         fig.tight_layout()
+
         if not show:
             plt.close(fig)
         if self.save:
