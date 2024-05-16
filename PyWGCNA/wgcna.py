@@ -47,7 +47,7 @@ plt.rcParams["axes.linewidth"] = 1
 plt.rcParams["axes.facecolor"] = "white"
 plt.rcParams['legend.title_fontsize'] = 15
 
-sns.set_style("white")
+sns.set_style("darkgrid")
 
 # public values
 networkTypes = ["unsigned", "signed", "signed hybrid"]
@@ -2841,12 +2841,12 @@ class WGCNA(GeneExp):
         labels = (np.asarray(["{0}\n({1})".format(cor, pvalue) for cor, pvalue in zip(tmp_cor.values.flatten(), tmp_pvalue.values.flatten())])).reshape(moduleTraitCor.T.shape)
 
         font_scale = max(0.5, 1.5 / max(num_modules, num_traits))
-        annot_font_size = min(max(10, 300 / (num_modules + num_traits)), 15)
+        annot_font_size = min(max(10, 300 / (num_modules + num_traits)), 20)
         label_font_size = min(max(10, 300 / (num_modules + num_traits)), 20)
         title_font_size = min(max(20, 500 / (num_modules + num_traits)), 30)
-        legend_font_size = min(max(10, 300 / num_traits), 15)
+        legend_font_size = min(max(10, 300 / num_traits), 20)
 
-        sns.set(font_scale=font_scale)
+        sns.set_theme(font_scale=font_scale)
         res = sns.heatmap(moduleTraitCor.T, annot=labels, fmt="", cmap='RdBu_r',
                         vmin=-1, vmax=1, ax=ax, annot_kws={'size': annot_font_size, "weight": "bold"},
                         xticklabels=xlabels, yticklabels=ylabels)
@@ -2937,103 +2937,109 @@ class WGCNA(GeneExp):
 
     def plotModuleEigenGene(self, moduleName, metadata, show=True):
         """
-        Plot module eigengene figure in given module.
+        plot module eigen gene figure in given module
 
-        :param moduleName: Name of the module.
+        :param moduleName: module name
         :type moduleName: str
-        :param metadata: List of metadata to be plotted.
+        :param metadata: list of metadata you want to be plotted
         :type metadata: list
-        :param show: Indicates if the plot should be displayed when the code runs.
+        :param show: indicate if you want to see plots in when you run your code
         :type show: bool
         """
         sampleInfo = self.datExpr.obs
 
-        height_ratios = [len(list(self.metadataColors[m].keys())) for m in metadata]
+        height_ratios = []
+        for m in metadata:
+            height_ratios.append(len(list(self.metadataColors[m].keys())))
         height_ratios.reverse()
 
         modules = np.unique(self.datExpr.var['moduleColors']).tolist()
-        if moduleName not in modules:
+        if np.all(moduleName not in modules):
             print(f"{WARNING}Module name does not exist in {ENDC}")
             return None
+        else:
+            heatmap = self.datExpr[:, self.datExpr.var['moduleColors'] == moduleName].to_df()
+            heatmap = (heatmap - heatmap.min(axis=0)) / (heatmap.max(axis=0) - heatmap.min(axis=0))
+            heatmap = heatmap.T
+            a = pdist(heatmap)
+            np.nan_to_num(a, copy=False)
+            Z = WGCNA.hclust(a, method="average")
+            # Clusterize the data
+            labels = fcluster(Z, t=0.8, criterion='distance')
+            # Keep the indices to sort labels
+            labels_order = np.argsort(labels)
+            heatmap = heatmap.iloc[labels_order, :]
+            ME = pd.DataFrame(self.datME["ME" + moduleName].values, columns=['eigengeneExp'])
+            ME['sample_name'] = self.datME.index
+            ind = [i + 0.5 for i in range(ME.shape[0])]
 
-        heatmap = self.datExpr[:, self.datExpr.var['moduleColors'] == moduleName].to_df()
-        heatmap = (heatmap - heatmap.min(axis=0)) / (heatmap.max(axis=0) - heatmap.min(axis=0))
-        heatmap = heatmap.T
-        a = pdist(heatmap)
-        np.nan_to_num(a, copy=False)
-        Z = WGCNA.hclust(a, method="average")
-        labels = fcluster(Z, t=0.8, criterion='distance')
-        labels_order = np.argsort(labels)
-        heatmap = heatmap.iloc[labels_order, :]
+            if len(metadata) != 0:
+                fig, axs = plt.subplots(nrows=3, ncols=2, figsize=(ME.shape[0], len(metadata) * 5),
+                                        sharex='col', gridspec_kw={
+                        'height_ratios': [len(metadata) * 0.4, len(metadata) * 0.5, len(metadata) * 1.5],
+                        'width_ratios': [20, 3]})
 
-        ME = pd.DataFrame(self.datME["ME" + moduleName].values, columns=['eigengeneExp'])
-        ME['sample_name'] = self.datME.index
-        ind = [i + 0.5 for i in range(ME.shape[0])]
-
-        fig_width = max(ME.shape[0] * 0.2, 10)  # Ensure a minimum width for clarity
-        fig_height = max(len(metadata) * 5, 10)  # Ensure a minimum height for clarity
-
-        if len(metadata) != 0:
-            fig, axs = plt.subplots(nrows=3, ncols=2, figsize=(fig_width, fig_height),
-                                    sharex='col', gridspec_kw={
-                                        'height_ratios': [len(metadata) * 0.4, len(metadata) * 0.5, len(metadata) * 1.5],
-                                        'width_ratios': [20, 5]})  # Increase width ratio for legend
-
-            gs = axs[0, 1].get_gridspec()
-            for ax in axs[:, 1]:
-                ax.remove()
-            ax_legend = fig.add_subplot(gs[:, 1])
-            ax_legend.axis('off')
-            axs_legend = gridspec.GridSpecFromSubplotSpec(len(metadata), 1, subplot_spec=ax_legend,
-                                                        height_ratios=height_ratios)
-
-            for m in metadata:
-                handles = []
-                x = ind
-                y = np.repeat(3000 * metadata.index(m), len(ind))
-                color = sampleInfo[m].values
-                for n in list(self.metadataColors[m].keys()):
-                    color = np.where(color == n, self.metadataColors[m][n], color)
-                    patch = mpatches.Patch(color=self.metadataColors[m][n], label=n)
-                    handles.append(patch)
-                axs[0, 0].scatter(x, y, c=color, s=1600, marker='s')
-                ax_legend = plt.Subplot(fig, axs_legend[len(metadata) - 1 - metadata.index(m)])
-                ax_legend.legend(title=m, handles=handles, fontsize='large', loc='center left', bbox_to_anchor=(1, 0.5))
+                gs = axs[0, 1].get_gridspec()
+                # remove the underlying axes
+                for ax in axs[:, 1]:
+                    ax.remove()
+                ax_legend = fig.add_subplot(gs[:, 1])
                 ax_legend.axis('off')
-                fig.add_subplot(ax_legend)
+                axs_legend = gridspec.GridSpecFromSubplotSpec(len(metadata), 1, subplot_spec=ax_legend,
+                                                              height_ratios=height_ratios)
 
-            axs[0, 0].set_title(f"Module Eigengene for {moduleName}", size=28, fontweight="bold")
-            axs[0, 0].set_ylim(-2000, np.max(y) + 2000)
-            axs[0, 0].grid(False)
-            axs[0, 0].axis('off')
+                for m in metadata:
+                    handles = []
+                    x = ind
+                    y = np.repeat(3000 * metadata.index(m), len(ind))
+                    color = sampleInfo[m].values
+                    for n in list(self.metadataColors[m].keys()):
+                        color = np.where(color == n, self.metadataColors[m][n], color)
+                        patch = mpatches.Patch(color=self.metadataColors[m][n], label=n)
+                        handles.append(patch)
+                    axs[0, 0].scatter(x, y, c=color, s=1600, marker='s')
+                    ax_legend = plt.Subplot(fig, axs_legend[len(metadata) - 1 - metadata.index(m)])
+                    ax_legend.legend(title=m, handles=handles)
+                    ax_legend.axis('off')
+                    fig.add_subplot(ax_legend)
 
-            axs[1, 0].bar(ind, ME.eigengeneExp, align='center', color='black')
-            axs[1, 0].set_ylabel('Eigengene Expression', fontsize=16)
-            axs[1, 0].set_facecolor('white')
-            axs[1, 0].tick_params(axis='x', labelsize=12)
-            axs[1, 0].tick_params(axis='y', labelsize=12)
+                axs[0, 0].set_title(f"Module Eigengene for {moduleName}", size=20, fontweight="bold")
+                axs[0, 0].set_ylim(-2000, np.max(y) + 2000)
+                axs[0, 0].grid(False)
+                axs[0, 0].axis('off')
 
-            cmap = sns.color_palette("dark:red", as_cmap=True)
-            sns.heatmap(heatmap, cmap=cmap, cbar=False, yticklabels=False, xticklabels=False, ax=axs[2, 0])
+                axs[1, 0].bar(ind, ME.eigengeneExp, align='center', color='black')
+                axs[1, 0].tick_params(axis='y', labelsize=15)
+                axs[1, 0].set_ylabel('Eigengene Expression', fontsize=15)
+                axs[1, 0].set_facecolor('white')
 
-        else:
-            fig, axs = plt.subplots(nrows=2, ncols=1, figsize=(fig_width, 20), sharex='col', gridspec_kw={'height_ratios': [1, 1.5]}, facecolor='white')
+                cmap = sns.color_palette("dark:red", as_cmap=True)
+                sns.heatmap(heatmap, cmap=cmap,
+                            cbar=False,  # cbar_ax=axs[2,1],
+                            yticklabels=False, xticklabels=False,
+                            ax=axs[2, 0])
+            else:
+                fig, axs = plt.subplots(nrows=2, ncols=1, figsize=(ME.shape[0], 20),
+                                        sharex='col', gridspec_kw={
+                        'height_ratios': [1, 1.5]}, facecolor='white')
 
-            axs[0].set_title(f"Module Eigengene for {moduleName}", size=28, fontweight="bold")
-            axs[0].bar(ind, ME.eigengeneExp, align='center', color='black')
-            axs[0].set_ylabel('Eigengene Expression', fontsize=16)
-            axs[0].tick_params(axis='x', labelsize=12)
-            axs[0].tick_params(axis='y', labelsize=12)
+                axs[0].set_title(f"Module Eigengene for {moduleName}", size=20, fontweight="bold")
+                axs[0].bar(ind, ME.eigengeneExp, align='center', color='black')
+                axs[0].tick_params(axis='y', labelsize=15)
+                axs[0].set_ylabel('Eigengene Expression', fontsize=15)
 
-            cmap = sns.color_palette("dark:red", as_cmap=True)
-            sns.heatmap(heatmap, cmap=cmap, cbar=False, yticklabels=False, xticklabels=False, ax=axs[1])
+                cmap = sns.color_palette("dark:red", as_cmap=True)
+                sns.heatmap(heatmap, cmap=cmap,
+                            cbar=False,  # cbar_ax=axs[2,1],
+                            yticklabels=False, xticklabels=False,
+                            ax=axs[1])
 
-        if self.save:
-            fig.savefig(f"{self.outputPath}figures/module_heatmap_eigengene_{moduleName}.{self.figureType}")
-        if not show:
-            plt.close(fig)
-        else:
-            return axs
+            if self.save:
+                fig.savefig(f"{self.outputPath}figures/module_heatmap_eigengene_{moduleName}.{self.figureType}")
+            if not show:
+                plt.close(fig)
+            else:
+                return axs
 
         return None
 
@@ -3102,72 +3108,18 @@ class WGCNA(GeneExp):
                     palette.replace(self.metadataColors[colorBar], inplace=True)
                     palette = palette[colorBar].values
 
-                fig, axs = plt.subplots(nrows=2, ncols=2, figsize=(cat.shape[0] + 2, len(metadata) * 4),
-                                        sharex='col', gridspec_kw={
-                        'height_ratios': [len(metadata) * 0.4, len(metadata) * 0.6],
-                        'width_ratios': [cat.shape[0], 3]})
-
-                gs = axs[0, 1].get_gridspec()
-                # remove the underlying axes
-                for ax in axs[:, 1]:
-                    ax.remove()
-                ax_legend = fig.add_subplot(gs[:, 1])
-                ax_legend.axis('off')
-                axs_legend = gridspec.GridSpecFromSubplotSpec(len(metadata), 1, subplot_spec=ax_legend,
-                                                              height_ratios=height_ratios)
+                fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(cat.shape[0] + 2, len(metadata) * 4))
 
                 ind = [i for i in range(cat.shape[0])]
-                for m in metadata:
-                    handles = []
-                    x = ind
-                    y = np.repeat(3000 * metadata.index(m), len(ind))
-                    color = cat[m].values
-                    if type(self.metadataColors[m]) == dict:
-                        for n in list(self.metadataColors[m].keys()):
-                            color = np.where(color == n, self.metadataColors[m][n], color)
-                            patch = mpatches.Patch(color=self.metadataColors[m][n], label=n)
-                            handles.append(patch)
-                        if m != colorBar:
-                            axs[0, 0].scatter(x, y, c=color, s=1600, marker='s')
-                        ax_legend = plt.Subplot(fig, axs_legend[len(metadata) - 1 - metadata.index(m)])
-                        ax_legend.legend(title=m, handles=handles)
-                        ax_legend.axis('off')
-                        # fig.add_subplot(ax_legend)
-                    else:
-                        cat[m] = cat[m].astype('float')
-                        color = cat[m].values
-                        axs[0, 0].scatter(x, y, c=color,
-                                          cmap=self.metadataColors[m].get_cmap(),
-                                          s=1600, marker='s')
-
-                        ax_legend = plt.Subplot(fig, axs_legend[len(metadata) - 1 - metadata.index(m)])
-                        clb = fig.colorbar(mappable=self.metadataColors[m],
-                                           ax=ax_legend,
-                                           orientation='horizontal',
-                                           fraction=0.9)
-                        clb.ax.set_title(m.capitalize())
-                        ax_legend.axis('off')
-                        # fig.add_subplot(ax_legend)
-                    # if m != colorBar:
-                    #     axs[0, 0].scatter(x, y, c=color, s=1600, marker='s')
-                    # ax_legend = plt.Subplot(fig, axs_legend[len(metadata) - 1 - metadata.index(m)])
-                    # ax_legend.legend(title=m, handles=handles)
-                    # ax_legend.axis('off')
-                    # fig.add_subplot(ax_legend)
-
-                axs[0, 0].set_title(f"Module Eigengene for {moduleName}", size=28, fontweight="bold")
-                axs[0, 0].set_ylim(-2000, np.max(y) + 2000)
-                axs[0, 0].grid(False)
-                axs[0, 0].axis('off')
-
-                ind = [i for i in range(cat.shape[0])]
-                axs[1, 0].bar(ind, ybar, align='center', color=palette)
-                axs[1, 0].errorbar(ind, ybar, yerr=ebar, fmt="o", color="r")
-                axs[1, 0].scatter(xdot, ydot, c='black', alpha=0.5)
-                axs[1, 0].set_xticks(np.arange(len(ind)))
-                axs[1, 0].set_xticklabels(label, rotation=90)
-                axs[1, 0].set_ylabel('eigengeneExp')
-                axs[1, 0].set_facecolor('white')
+                ax.tick_params(axis='y', labelsize=15)
+                ax.set_title(f"Module Eigengene for {moduleName}", size=20, fontweight="bold")
+                ax.bar(ind, ybar, align='center', color=palette)
+                ax.errorbar(ind, ybar, yerr=ebar, fmt="o", color="r")
+                ax.scatter(xdot, ydot, c='black', alpha=0.5)
+                ax.set_xticks(np.arange(len(ind)))
+                ax.set_xticklabels(label, rotation=90, fontsize=15)
+                ax.set_ylabel('Eigengene Expression', fontsize=15)
+                ax.set_facecolor('white')
                 fig.subplots_adjust(bottom=0.3)
                 fig.savefig(f"{self.outputPath}figures/module_barplot_eigengene_{moduleName}.{self.figureType}")
                 if not show:
@@ -3181,7 +3133,7 @@ class WGCNA(GeneExp):
                     df[metadata[i]] = sampleInfo[metadata[i]].values
                     palette = self.metadataColors[metadata[i]]
                     bar = sns.barplot(x=metadata[i], y="eigengeneExp", data=df, palette=palette, ci='sd', capsize=0.1,
-                                      ax=axs[i])
+                                    ax=axs[i])
                     if i != 0:
                         bar.set(ylabel=None)
 
