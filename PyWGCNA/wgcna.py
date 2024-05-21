@@ -240,14 +240,17 @@ class WGCNA(GeneExp):
         if show:
             plt.figure(figsize=(max(25, round(self.datExpr.X.shape[0] / 20)), 10), facecolor='white')
             dendrogram(sampleTree, color_threshold=self.cut, labels=self.datExpr.to_df().index, leaf_rotation=90,
-                       leaf_font_size=12)
+                    leaf_font_size=12)
             plt.axhline(y=self.cut, c='grey', lw=1, linestyle='dashed')
-            plt.title('Sample clustering to detect outliers')
-            plt.xlabel('Samples')
-            plt.ylabel('Distances')
+            plt.title('Clustering of Samples', fontsize=20)
+            plt.xlabel('Samples', fontsize=15)
+            plt.ylabel('Distances', fontsize=15)
+            plt.yticks(fontsize=15)
+
             plt.tight_layout()
             if self.save:
                 plt.savefig(f"{self.outputPath}figures/sample_clustering_cleaning.{self.figureType}")
+
 
         # Determine cluster under the line
         clust = WGCNA.cutree(sampleTree, cutHeight=self.cut)
@@ -288,6 +291,7 @@ class WGCNA(GeneExp):
         ax[0].set_xlabel("Soft Threshold (power)", fontsize=font_size)
         ax[0].set_ylabel("Scale Free Topology Model Fit, signed R^2", fontsize=font_size)
         ax[0].title.set_text('Scale independence')
+        ax[0].title.set_fontsize(20)
         ax[0].tick_params(axis='both', which='major', labelsize=font_size)
 
         ax[1].plot(self.sft['Power'], self.sft['mean(k)'], 'o')
@@ -297,6 +301,7 @@ class WGCNA(GeneExp):
         ax[1].set_xlabel("Soft Threshold (power)", fontsize=font_size)
         ax[1].set_ylabel("Mean Connectivity", fontsize=font_size)
         ax[1].title.set_text('Mean connectivity')
+        ax[1].title.set_fontsize(20)
         ax[1].tick_params(axis='both', which='major', labelsize=font_size)
 
         fig.tight_layout()
@@ -359,9 +364,10 @@ class WGCNA(GeneExp):
             dendrogram(METree, color_threshold=self.MEDissThres, labels=MEDiss.columns, leaf_rotation=90,
                        leaf_font_size=16)
             plt.axhline(y=self.MEDissThres, c='grey', lw=1, linestyle='dashed')
-            plt.title('Clustering of module eigengenes')
+            plt.title('Clustering of module eigengenes', fontsize=20)
             plt.xlabel('')
-            plt.ylabel('')
+            plt.ylabel('Module Dissimilarity', fontsize=15)
+            plt.yticks(fontsize=15)
             plt.tight_layout()
             if self.save:
                 plt.savefig(f"{self.outputPath}figures/eigenesgenes.{self.figureType}")
@@ -2837,7 +2843,7 @@ class WGCNA(GeneExp):
 
         # Loop over data dimensions and create text annotations
         tmp_cor = moduleTraitCor.T.round(decimals=2)
-        tmp_pvalue = moduleTraitPvalue.T.round(decimals=3)
+        tmp_pvalue = moduleTraitPvalue.T.round(decimals=2)
         labels = (np.asarray(["{0}\n({1})".format(cor, pvalue) for cor, pvalue in zip(tmp_cor.values.flatten(), tmp_pvalue.values.flatten())])).reshape(moduleTraitCor.T.shape)
 
         font_scale = max(0.5, 1.5 / max(num_modules, num_traits))
