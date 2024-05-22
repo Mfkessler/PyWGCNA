@@ -2861,7 +2861,7 @@ class WGCNA(GeneExp):
         res.set_yticklabels(res.get_ymajorticklabels(), fontsize=label_font_size, fontweight="bold")
         plt.yticks(rotation=0)
 
-        ax.set_title(f"Module-trait Relationships heatmap for {self.name}",
+        ax.set_title(f"Module-trait Relationships Heatmap for {self.name}",
                     fontsize=title_font_size, fontweight="bold")
         ax.set_facecolor('white')
 
