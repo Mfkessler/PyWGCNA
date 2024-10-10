@@ -1101,7 +1101,7 @@ class WGCNA(GeneExp):
 
         if selectCols is None:
             cor_mat = np.corrcoef(
-                datExpr.T)  # cor_mat = do.call(corFnc.fnc, c(list(x = datExpr), weightOpt, corOptions))
+                datExpr.T).astype(np.float32)
         else:
             cor_mat = np.corrcoef(x=datExpr, y=datExpr[:, selectCols])  # , weightOpt, corOptions)
 
