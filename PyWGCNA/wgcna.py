@@ -2799,77 +2799,120 @@ class WGCNA(GeneExp):
 
         return datTraits
 
-    def module_trait_relationships_heatmap(self, metaData, alternative='two-sided', figsize=None, show=True, file_name='module-traitRelationships'):
+    def module_trait_relationships_heatmap(
+        self,
+        metaData: list,
+        alternative: str = 'two-sided',
+        cell_size: float = 1.2,
+        colorbar_space: float = 1.0,
+        cbar_ratio: float = 0.25,       # Ideal fraction of the colorbar height
+        cbar_max_inch: float = 8.0,    # Max allowed height in inches
+        show: bool = True,
+        file_name: str = 'module-traitRelationships'
+    ):
         """
-        Plot topic-trait relationship heatmap.
+        Plot module-trait correlation heatmap with:
+        - Truly square cells,
+        - A colorbar that is by default 'cbar_ratio' (e.g. 0.5) of the heatmap height,
+        - The colorbar never exceeds 'cbar_max_inch' in actual height,
+        - Vertically centered.
 
-        :param metaData: Traits you would like to see the relationship with topics (must be column name of datExpr.obs).
-        :type metaData: list
-        :param alternative: Defines the alternative hypothesis for calculating correlation for module-trait relationship. Default is ‘two-sided’. Options: 'two-sided’, ‘less’, ‘greater’.
-        :type alternative: str
-        :param figsize: Indicate the size of the plot.
-        :type figsize: tuple of float
-        :param show: Indicate if you want to show the plot or not (default: True).
-        :type show: bool
-        :param file_name: Name and path of the plot for saving (default: topic-traitRelationships).
-        :type file_name: str
+        Parameters:
+        - metaData (list): Traits in datExpr.obs for correlation with modules.
+        - alternative (str): 'two-sided', 'less', 'greater' for Pearson correlation.
+        - cell_size (float): Size (in inches) per cell (width=height).
+        - colorbar_space (float): Extra width (in inches) for the colorbar column.
+        - cbar_ratio (float): Fraction of total height used by the colorbar (0<ratio<1).
+        - cbar_max_inch (float): Absolute max colorbar height in inches.
+        - show (bool): Whether to display the plot.
+        - file_name (str): Plot file name for saving.
         """
+
+        # 1) Calculate correlations
         datTraits = self.getDatTraits(metaData)
-
         moduleTraitCor = pd.DataFrame(index=self.MEs.columns, columns=datTraits.columns, dtype="float")
         moduleTraitPvalue = pd.DataFrame(index=self.MEs.columns, columns=datTraits.columns, dtype="float")
 
         for i in self.MEs.columns:
             for j in datTraits.columns:
-                tmp = stats.pearsonr(self.MEs[i], datTraits[j], alternative=alternative)
-                moduleTraitCor.loc[i, j] = tmp[0]
-                moduleTraitPvalue.loc[i, j] = tmp[1]
+                corr, pval = stats.pearsonr(self.MEs[i], datTraits[j], alternative=alternative)
+                moduleTraitCor.loc[i, j] = corr
+                moduleTraitPvalue.loc[i, j] = pval
 
         if set(metaData) == set(self.datExpr.obs.columns.tolist()):
             self.moduleTraitCor = moduleTraitCor
             self.moduleTraitPvalue = moduleTraitPvalue
 
-        num_modules = moduleTraitPvalue.shape[0]
-        num_traits = moduleTraitPvalue.shape[1]
+        # 2) Dimensions for the entire figure
+        num_modules = moduleTraitCor.shape[0]  # Columns
+        num_traits = moduleTraitCor.shape[1]   # Rows
+        fig_width = num_modules * cell_size + colorbar_space
+        fig_height = num_traits * cell_size
 
-        if figsize is None:
-            figsize = (max(20, int(num_modules * 0.8)), num_traits * 0.8)
+        fig = plt.figure(figsize=(fig_width, fig_height), facecolor='white')
+        
+        # 3) Main GridSpec: [Heatmap | Colorbar column]
+        outer_gs = fig.add_gridspec(nrows=1, ncols=2, width_ratios=[num_modules, 1])
+        # Left column: Heatmap
+        ax = fig.add_subplot(outer_gs[0, 0])
 
-        fig, ax = plt.subplots(figsize=figsize, facecolor='white')
+        # 4) Right area for the colorbar is divided into 3 rows (top, middle, bottom)
+        ideal_height_inch = fig_height * cbar_ratio
+        real_cbar_inch = min(ideal_height_inch, cbar_max_inch)
+        real_cbar_ratio = real_cbar_inch / fig_height  # Fraction of total height
 
-        # Names
-        xlabels = [label[2:].capitalize() + '(' + str(sum(self.datExpr.var['moduleColors'] == label[2:])) + ')' for label in self.MEs.columns]
+        top_bottom = (1.0 - real_cbar_ratio) / 2.0
+        cbar_gs = outer_gs[0, 1].subgridspec(
+            nrows=3, ncols=1,
+            height_ratios=[top_bottom, real_cbar_ratio, top_bottom]
+        )
+        cax = fig.add_subplot(cbar_gs[1, 0])  # in the middle row
+
+        # 5) Labels and annotations
+        xlabels = [
+            label[2:].capitalize() + f'({sum(self.datExpr.var["moduleColors"] == label[2:])})'
+            for label in self.MEs.columns
+        ]
         ylabels = datTraits.columns
 
-        # Loop over data dimensions and create text annotations
-        tmp_cor = moduleTraitCor.T.round(decimals=2)
-        tmp_pvalue = moduleTraitPvalue.T.round(decimals=2)
-        labels = (np.asarray(["{0}\n({1})".format(cor, pvalue) for cor, pvalue in zip(tmp_cor.values.flatten(), tmp_pvalue.values.flatten())])).reshape(moduleTraitCor.T.shape)
+        tmp_cor = moduleTraitCor.T.round(2)
+        tmp_pval = moduleTraitPvalue.T.round(2)
+        labels = np.array([
+            f"{c}\n({p})" for c, p in zip(tmp_cor.values.flatten(), tmp_pval.values.flatten())
+        ]).reshape(tmp_cor.shape)
 
-        font_scale = max(0.5, 1.5 / max(num_modules, num_traits))
-        annot_font_size = min(max(10, 300 / (num_modules + num_traits)), 20)
-        label_font_size = min(max(10, 300 / (num_modules + num_traits)), 20)
-        title_font_size = min(max(20, 500 / (num_modules + num_traits)), 30)
-        legend_font_size = min(max(10, 300 / num_traits), 20)
+        annot_font_size = 9
+        label_font_size = 10
+        title_font_size = 12
 
-        sns.set_theme(font_scale=font_scale)
-        res = sns.heatmap(moduleTraitCor.T, annot=labels, fmt="", cmap='viridis',
-                        vmin=-1, vmax=1, ax=ax, annot_kws={'size': annot_font_size, "weight": "bold"},
-                        xticklabels=xlabels, yticklabels=ylabels)
+        # 6) Heatmap
+        res = sns.heatmap(
+            moduleTraitCor.T,
+            annot=labels,
+            fmt="",
+            cmap='viridis',
+            vmin=-1, vmax=1,
+            ax=ax,
+            cbar_ax=cax,
+            square=True,  # Cells remain square
+            xticklabels=xlabels,
+            yticklabels=ylabels,
+            annot_kws={'size': annot_font_size, "weight": "bold"}
+        )
 
+        # 7) Formatting
         res.set_xticklabels(res.get_xmajorticklabels(), fontsize=label_font_size, fontweight="bold", rotation=90)
         res.set_yticklabels(res.get_ymajorticklabels(), fontsize=label_font_size, fontweight="bold")
-        plt.yticks(rotation=0)
-
         ax.set_title(f"Module-trait Relationships Heatmap for {self.name}",
                     fontsize=title_font_size, fontweight="bold")
-        ax.set_facecolor('white')
+        plt.yticks(rotation=0)
 
-        cbar = ax.collections[0].colorbar
-        cbar.ax.tick_params(labelsize=legend_font_size)
+        cax.tick_params(labelsize=label_font_size)
 
+        # 8) Layout
         fig.tight_layout()
 
+        # 9) Save / Show
         if not show:
             plt.close(fig)
         if self.save:
