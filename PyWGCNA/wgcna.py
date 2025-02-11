@@ -1922,7 +1922,7 @@ class WGCNA(GeneExp):
 
         colors = np.empty(nLabels.shape[0], dtype=object)
         fin = [v is not None for v in nLabels.Value]
-        colors[np.where(not fin)[0].tolist()] = naColor
+        colors[np.where(~np.array(fin))[0].tolist()] = naColor
         finLabels = nLabels.loc[fin, :]
         colors[fin] = [extColorSeq[x] for x in finLabels.Value]
 
@@ -3029,7 +3029,7 @@ class WGCNA(GeneExp):
             ax.remove()
         ax_legend = fig.add_subplot(gs[:, 0])
         ax_legend.axis('off')
-        axs_legend = gridspec.GridSpecFromSubplotSpec(len(metadata), 1, subplot_spec=ax_legend, height_ratios=height_ratios)
+        axs_legend = gridspec.GridSpecFromSubplotSpec(len(metadata), 1, subplot_spec=ax_legend.get_subplotspec(), height_ratios=height_ratios)
 
         for m in metadata:
             handles = []
