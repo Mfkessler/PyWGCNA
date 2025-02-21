@@ -378,15 +378,15 @@ class WGCNA(GeneExp):
                 kwargs = kwargs_function['mergeCloseModules']
             merge = WGCNA.mergeCloseModules(self.datExpr.to_df(), self.datExpr.var['dynamicColors'],
                                             cutHeight=self.MEDissThres, **kwargs)
-            # The merged module colors; Rename to moduleColors
-            self.datExpr.var['moduleColors'] = merge['colors']
+            # The merged module colors; Rename to module_colors
+            self.datExpr.var['module_colors'] = merge['colors']
         else:
-            self.datExpr.var['moduleColors'] = ["black"] * self.datExpr.shape[1]
+            self.datExpr.var['module_colors'] = ["black"] * self.datExpr.shape[1]
 
         # Construct numerical labels corresponding to the colors
-        colorOrder = np.unique(self.datExpr.var['moduleColors']).tolist()
-        self.datExpr.var['moduleLabels'] = [colorOrder.index(x) if x in colorOrder else None for x in
-                                            self.datExpr.var['moduleColors']]
+        colorOrder = np.unique(self.datExpr.var['module_colors']).tolist()
+        self.datExpr.var['module_labels'] = [colorOrder.index(x) if x in colorOrder else None for x in
+                                            self.datExpr.var['module_colors']]
         # Eigengenes of the new merged modules:
         self.MEs = merge['newMEs']
 
@@ -394,7 +394,7 @@ class WGCNA(GeneExp):
         kwargs = dict()
         if 'moduleEigengenes' in list(kwargs_function.keys()):
             kwargs = kwargs_function['moduleEigengenes']
-        self.datME = WGCNA.moduleEigengenes(self.datExpr.to_df(), self.datExpr.var['moduleColors'], **kwargs)['eigengenes']
+        self.datME = WGCNA.moduleEigengenes(self.datExpr.to_df(), self.datExpr.var['module_colors'], **kwargs)['eigengenes']
         if 'MEgrey' in self.datME.columns:
             self.datME.drop(['MEgrey'], axis=1, inplace=True)
 
@@ -448,7 +448,7 @@ class WGCNA(GeneExp):
             print("\tDone..\n")
 
         # Select module probes
-        modules = self.datExpr.var.moduleColors.unique().tolist()
+        modules = self.datExpr.var.module_colors.unique().tolist()
         metadata = self.datExpr.obs.columns.tolist()
         if order is not None:
             if all(item in metadata for item in order):
@@ -2870,7 +2870,7 @@ class WGCNA(GeneExp):
 
         # 5) Labels and annotations
         xlabels = [
-            label[2:].capitalize() + f'({sum(self.datExpr.var["moduleColors"] == label[2:])})'
+            label[2:].capitalize() + f'({sum(self.datExpr.var["module_colors"] == label[2:])})'
             for label in self.MEs.columns
         ]
         ylabels = datTraits.columns
@@ -2925,7 +2925,7 @@ class WGCNA(GeneExp):
         :return: name of modules
         :rtype: ndarray
         """
-        return np.unique(self.datExpr.var['moduleColors']).tolist()
+        return np.unique(self.datExpr.var['module_colors']).tolist()
 
     def getGeneModule(self, moduleName):
         """
@@ -2938,13 +2938,13 @@ class WGCNA(GeneExp):
         :rtype: dict
         """
         output = {}
-        moduleColors = np.unique(self.datExpr.var['moduleColors']).tolist()
-        if moduleName not in moduleColors:
+        module_colors = np.unique(self.datExpr.var['module_colors']).tolist()
+        if moduleName not in module_colors:
             print(f"{WARNING}Module name(s) does not exist in {ENDC}")
             return None
-        for color in moduleColors:
+        for color in module_colors:
             if color in moduleName:
-                output[color] = self.datExpr.var[self.datExpr.var['moduleColors'] == color]
+                output[color] = self.datExpr.var[self.datExpr.var['module_colors'] == color]
         return output
 
     def getModulesGene(self, geneIds):
@@ -2962,7 +2962,7 @@ class WGCNA(GeneExp):
 
         modules = []
         for geneId in geneIds:
-            modules.append(self.datExpr.var.moduleColors[self.datExpr.var.gene_id == geneId])
+            modules.append(self.datExpr.var.module_colors[self.datExpr.var.gene_id == geneId])
 
         if len(modules) == 1:
             modules = modules[0]
@@ -3001,12 +3001,12 @@ class WGCNA(GeneExp):
         height_ratios = [len(list(self.metadataColors[m].keys())) for m in metadata]
         height_ratios.reverse()
 
-        modules = np.unique(self.datExpr.var['moduleColors']).tolist()
+        modules = np.unique(self.datExpr.var['module_colors']).tolist()
         if moduleName not in modules:
             print(f"Module name does not exist in dataset")
             return None
 
-        heatmap = self.datExpr[:, self.datExpr.var['moduleColors'] == moduleName].to_df()
+        heatmap = self.datExpr[:, self.datExpr.var['module_colors'] == moduleName].to_df()
         heatmap = (heatmap - heatmap.min(axis=0)) / (heatmap.max(axis=0) - heatmap.min(axis=0))
         heatmap = heatmap.T
         a = pdist(heatmap)
@@ -3098,7 +3098,7 @@ class WGCNA(GeneExp):
                 height_ratios.append(1)
         height_ratios.reverse()
 
-        modules = np.unique(self.datExpr.var['moduleColors']).tolist()
+        modules = np.unique(self.datExpr.var['module_colors']).tolist()
         if np.all(moduleName not in modules):
             print(f"{WARNING}Module name does not exist in {ENDC}")
             return None
@@ -3193,7 +3193,7 @@ class WGCNA(GeneExp):
         if file_name is None:
             file_name = moduleName
 
-        modules = np.unique(self.datExpr.var['moduleColors']).tolist()
+        modules = np.unique(self.datExpr.var['module_colors']).tolist()
         if np.all(moduleName not in modules):
             print(f"{WARNING}Module name does not exist in {ENDC}")
             return
@@ -3207,7 +3207,7 @@ class WGCNA(GeneExp):
         elif type == "KEGG" and sets is None:
             sets = ["KEGG_2016"]
 
-        geneModule = self.datExpr.var.gene_name[self.datExpr.var.moduleColors == moduleName]
+        geneModule = self.datExpr.var.gene_name[self.datExpr.var.module_colors == moduleName]
         geneModule = geneModule.fillna("").values.tolist()
 
         if type in ["GO", "KEGG"]:
@@ -3455,7 +3455,7 @@ class WGCNA(GeneExp):
             print(f"{WARNING}Network directory does not exist!\nCreating network directory!{ENDC}")
             os.makedirs(f"{self.outputPath}figures/network/")
 
-        gene_id = self.datExpr.var.loc[self.datExpr.var.moduleColors.isin(modules), :]
+        gene_id = self.datExpr.var.loc[self.datExpr.var.module_colors.isin(modules), :]
         if gene_id.shape[0] == 0:
             sys.exit(f"There is no gene assign to {','.join(modules)} module(s)!")
         if filters is not None:
@@ -3481,8 +3481,8 @@ class WGCNA(GeneExp):
         gene_id = list(adj.index.get_level_values(0)) + list(adj.index.get_level_values(1))
         gene_id = np.unique(gene_id)
         nodes = self.datExpr.var.loc[gene_id, :]
-        node_color = nodes["moduleColors"].tolist()
-        nodes.drop(["dynamicColors", "moduleColors", "moduleLabels"], axis=1, inplace=True)
+        node_color = nodes["module_colors"].tolist()
+        nodes.drop(["dynamicColors", "module_colors", "module_labels"], axis=1, inplace=True)
         title = nodes.index.tolist()
         for i in range(nodes.shape[0]):
             for j in range(nodes.shape[1]):
@@ -3535,7 +3535,7 @@ class WGCNA(GeneExp):
         """
 
         if moduleName is not None:
-            genes = self.datExpr.var[self.datExpr.var.moduleColors == moduleName]
+            genes = self.datExpr.var[self.datExpr.var.module_colors == moduleName]
             geneList = genes.index.astype(str).tolist()
         elif geneList is None:
             sys.exit("geneList or moduleName should be empty at the same time!")
@@ -3689,7 +3689,7 @@ class WGCNA(GeneExp):
         """
 
         datExpr = self.datExpr.copy()
-        all_modules = np.unique(datExpr.var['moduleColors']).tolist()
+        all_modules = np.unique(datExpr.var['module_colors']).tolist()
 
         # Determine which modules to process
         if isinstance(moduleName, str):
@@ -3707,7 +3707,7 @@ class WGCNA(GeneExp):
         top_genes_per_module = {}
 
         for module in modules_to_process:
-            module_data = datExpr[:, datExpr.var['moduleColors'] == module]
+            module_data = datExpr[:, datExpr.var['module_colors'] == module]
             adj = WGCNA.adjacency(module_data.to_df(), power=self.power, adjacencyType=self.networkType, verbose=False)
             adj = pd.DataFrame(adj, columns=module_data.to_df().columns, index=module_data.to_df().columns)
             hub_genes = adj.sum().sort_values(ascending=False)

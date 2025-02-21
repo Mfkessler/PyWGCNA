@@ -66,11 +66,11 @@ class Comparison:
         names = []
         module_sets = {}
         for network, data in self.geneModules.items():
-            modules = data.moduleColors.unique()
+            modules = data.module_colors.unique()
             for module in modules:
                 module_name = f"{network}:{module}"
                 names.append(module_name)
-                module_sets[module_name] = set(data.index[data.moduleColors == module])
+                module_sets[module_name] = set(data.index[data.module_colors == module])
 
         jaccard_similarity = pd.DataFrame(0.0, columns=names, index=names)
 
@@ -102,26 +102,26 @@ class Comparison:
         num = 0
         names = []
         for network in self.geneModules.keys():
-            num = num + len(self.geneModules[network].moduleColors.unique())
-            tmp = [f"{network}:" + s for s in self.geneModules[network].moduleColors.unique().tolist()]
+            num = num + len(self.geneModules[network].module_colors.unique())
+            tmp = [f"{network}:" + s for s in self.geneModules[network].module_colors.unique().tolist()]
             names = names + tmp
         fraction = pd.DataFrame(0, columns=names, index=names)
 
         for network1 in self.geneModules.keys():
             for network2 in self.geneModules.keys():
                 if network1 != network2:
-                    modules1 = self.geneModules[network1].moduleColors.unique().tolist()
-                    modules2 = self.geneModules[network2].moduleColors.unique().tolist()
+                    modules1 = self.geneModules[network1].module_colors.unique().tolist()
+                    modules2 = self.geneModules[network2].module_colors.unique().tolist()
                     for module1 in modules1:
                         for module2 in modules2:
                             list1 = self.geneModules[network1].index[
-                                self.geneModules[network1].moduleColors == module1].tolist()
+                                self.geneModules[network1].module_colors == module1].tolist()
                             list2 = self.geneModules[network2].index[
-                                self.geneModules[network2].moduleColors == module2].tolist()
+                                self.geneModules[network2].module_colors == module2].tolist()
                             num = np.intersect1d(list1, list2)
                             fraction.loc[f"{network1}:{module1}", f"{network2}:{module2}"] = len(num) / len(list2) * 100
                 else:
-                    modules = self.geneModules[network1].moduleColors.unique().tolist()
+                    modules = self.geneModules[network1].module_colors.unique().tolist()
                     for module in modules:
                         fraction.loc[f"{network1}:{module}", f"{network1}:{module}"] = 1.0
         self.fraction = fraction
@@ -144,9 +144,9 @@ class Comparison:
         genes = set()
 
         for network, data in self.geneModules.items():
-            modules = data.moduleColors.unique()
+            modules = data.module_colors.unique()
             names += [f"{network}:{module}" for module in modules]
-            module_lists[network] = {module: set(data.index[data.moduleColors == module]) for module in modules}
+            module_lists[network] = {module: set(data.index[data.module_colors == module]) for module in modules}
             genes.update(data.index)
 
         pvalue = pd.DataFrame(0, columns=names, index=names)
