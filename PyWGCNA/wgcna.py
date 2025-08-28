@@ -1047,102 +1047,174 @@ class WGCNA(GeneExp):
         return dfout
 
     @staticmethod
-    def adjacency(datExpr, selectCols=None, adjacencyType="unsigned", power=6, corOptions=pd.DataFrame(), weights=None,
-                  weightArgNames=None, verbose=True):
+    def adjacency(
+        datExpr,
+        selectCols=None,
+        adjacencyType="unsigned",
+        power=6,
+        corOptions=pd.DataFrame(),
+        weights=None,
+        weightArgNames=None,
+        verbose=True,
+        *,
+        # Safe defaults, backwards-compatible
+        dtype=np.float64,
+        force_symmetric=True,
+        clip_to_unit=True,
+        symmetry_method="average"  # "average" or "max"
+    ):
         """
-        Calculates (correlation or distance) network adjacency from given expression data or from a similarity
+        Compute a correlation-based network adjacency matrix from expression data.
 
-        :param datExpr: data frame containing expression data. Columns correspond to genes and rows to samples.
-        :type datExpr: pandas dataframe
-        :param selectCols: for correlation networks only; can be used to select genes whose adjacencies will be calculated. Should be either a numeric list giving the indices of the genes to be used, or a boolean list indicating which genes are to be used.
-        :type selectCols: list
-        :param adjacencyType: adjacency network type. Allowed values are (unique abbreviations of) "unsigned", "signed", "signed hybrid". (default = unsigned)
-        :type adjacencyType: str
-        :param power: soft thresholding power.
-        :type power: int
-        :param corOptions: specifying additional arguments to be passed to the function given by corFnc.
-        :type corOptions: pandas dataframe
-        :param weights: optional observation weights for datExpr to be used in correlation calculation. A matrix of the same dimensions as datExpr, containing non-negative weights. Only used with Pearson correlation.
-        :type weights: pandas dataframe
-        :param weightArgNames: character list of length 2 giving the names of the arguments to corFnc that represent weights for variable x and y. Only used if weights are non-NULL.
-        :type weightArgNames: list
-        :param verbose: logical indicating whether verbose output should be generated. (default = TRUE)
-        :type verbose: bool
+        Steps:
+        1) compute a gene-gene correlation matrix across samples,
+        2) map correlations to [0,1] depending on `adjacencyType`,
+        3) apply soft-thresholding with exponent `power`.
 
-        :return: Adjacency matrix
-        :rtype: pandas dataframe
+        Uses float64 by default to minimize round-off asymmetry and can enforce
+        exact symmetry of the returned adjacency.
+
+        Parameters
+        ----------
+        datExpr : pandas.DataFrame or numpy.ndarray
+            Expression matrix with genes in columns and samples in rows.
+        selectCols : list or numpy.ndarray, optional
+            Restrict computation to a subset of columns. If None, use all.
+        adjacencyType : {"unsigned","signed","signed hybrid"}, optional
+            Mapping from correlation to similarity:
+            - "unsigned": |cor|
+            - "signed": (1 + cor) / 2
+            - "signed hybrid": cor if cor>0 else 0
+        power : int, optional
+            Soft-thresholding power (β). Default 6.
+        corOptions, weights, weightArgNames : kept for API compatibility.
+        verbose : bool, optional
+            Print progress info.
+
+        Keyword-only Parameters
+        -----------------------
+        dtype : numpy dtype
+            Floating dtype for internal computations. Default np.float64.
+        force_symmetric : bool
+            If True, enforce symmetry on the final adjacency. Default True.
+        clip_to_unit : bool
+            If True, clip adjacency to [0,1]. Default True.
+        symmetry_method : {"average","max"}
+            How to enforce symmetry:
+            - "average": (A + A.T)/2
+            - "max":     np.maximum(A, A.T)
+
+        Returns
+        -------
+        numpy.ndarray
+            Adjacency matrix (n_genes x n_genes).
         """
         if verbose:
             print(f"{OKCYAN}calculating adjacency matrix ...{ENDC}")
+
         if weightArgNames is None:
             weightArgNames = ["weights.x", "weights.y"]
-        intType = adjacencyTypes.index(adjacencyType)
-        if intType is None:
+
+        try:
+            intType = adjacencyTypes.index(adjacencyType)
+        except ValueError:
             sys.exit(("Unrecognized 'type'. Recognized values are", str(adjacencyTypes)))
-        weights = WGCNA.checkAndScaleWeights(weights, datExpr, scaleByMax=False)
-        if weights is not None:
-            if selectCols is None:
-                if isinstance(corOptions, pd.DataFrame):
-                    weightOpt = pd.DataFrame({'weights.x': weights})
-                    weightOpt.index = weightArgNames[0]
-                else:
-                    weightOpt = weightArgNames[0] + " = weights"
-            else:
-                if isinstance(corOptions, pd.DataFrame):
-                    weightOpt = pd.DataFrame({'weights.x': weights, 'weights.y': weights[:, selectCols]})
-                    weightOpt.index = weightArgNames[0:2]
-                else:
-                    weightOpt = weightArgNames[1] + " = weights, " + weightArgNames[2] + " = weights[, selectCols]"
-        else:
-            if isinstance(corOptions, pd.DataFrame):
-                weightOpt = pd.DataFrame()
-            else:
-                weightOpt = ""
 
+        # Keep API compatibility (weights not used here)
+        _ = WGCNA.checkAndScaleWeights(weights, datExpr, scaleByMax=False)
+
+        # 1) Correlation matrix (float64 by default)
         if selectCols is None:
-            cor_mat = np.corrcoef(
-                datExpr.T).astype(np.float32)
+            cor_mat = np.corrcoef(np.asarray(datExpr, dtype=dtype).T).astype(dtype, copy=False)
         else:
-            cor_mat = np.corrcoef(x=datExpr, y=datExpr[:, selectCols])  # , weightOpt, corOptions)
+            x = np.asarray(datExpr, dtype=dtype)
+            y = x[:, selectCols]
+            cor_mat = np.corrcoef(x, y, rowvar=False).astype(dtype, copy=False)
 
-        if intType == 0:
-            cor_mat = abs(cor_mat)
-        elif intType == 1:
-            cor_mat = (1 + cor_mat) / 2
-        elif intType == 2:
-            cor_mat[cor_mat < 0] = 0
+        # 2) Correlation -> similarity in [0,1]
+        if intType == 0:      # unsigned
+            sim = np.abs(cor_mat, dtype=dtype)
+        elif intType == 1:    # signed
+            sim = (1.0 + cor_mat) / 2.0
+        elif intType == 2:    # signed hybrid
+            sim = cor_mat.copy()
+            sim[sim < 0.0] = 0.0
+        else:
+            sys.exit(("Unrecognized 'type'. Recognized values are", str(adjacencyTypes)))
 
         if verbose:
             print("\tDone..\n")
 
-        return cor_mat ** power
+        # 3) Soft-thresholding
+        adj = np.power(sim, power, dtype=dtype)
+
+        # 4) Enforce symmetry (robust against tiny numeric drift)
+        if force_symmetric:
+            if symmetry_method == "average":
+                adj = (adj + adj.T) / 2.0
+            elif symmetry_method == "max":
+                adj = np.maximum(adj, adj.T)
+            else:
+                raise ValueError("symmetry_method must be 'average' or 'max'.")
+
+        # 5) Keep within [0,1] if desired
+        if clip_to_unit:
+            np.clip(adj, 0.0, 1.0, out=adj)
+
+        return adj
+
 
     @staticmethod
-    def checkAdjMat(adjMat, min=0, max=1):
+    def checkAdjMat(adjMat, min_val=0, max_val=1):
         """
-        check adjacency matrix format is correct
+        Validate the shape and numeric properties of an adjacency matrix.
 
-        :param adjMat: data we want to be checked
-        :type adjMat: pandas dataframe
-        :param min: minimum value to be allowed for data (default = 0)
-        :type min: int
-        :param max: maximum value to be allowed for data (default = 1)
-        :type max: int
+        Uses a dtype-aware symmetry tolerance to avoid false positives when
+        computed in float32/float64.
 
-        :raises exit: if format is not correct
+        Parameters
+        ----------
+        adjMat : numpy.ndarray or pandas.DataFrame
+            Adjacency matrix to be validated.
+        min_val : float, optional
+            Minimum allowed entry (default 0).
+        max_val : float, optional
+            Maximum allowed entry (default 1).
+
+        Raises
+        ------
+        SystemExit
+            If validation fails (dimensionality, dtype, squareness, symmetry, range).
         """
+        # Convert DataFrame to ndarray if needed
+        if hasattr(adjMat, "values"):
+            adjMat = adjMat.values
+
         shape = adjMat.shape
         if shape is None or len(shape) != 2:
             sys.exit("adjacency is not two-dimensional")
 
         if not issubclass(adjMat.dtype.type, np.floating):
             sys.exit("adjacency is not numeric")
+
         if shape[0] != shape[1]:
             sys.exit("adjacency is not square")
-        if np.max(np.fabs(np.subtract(adjMat, adjMat.T))) > 1e-12:
-            sys.exit("adjacency is not symmetric")
-        if np.min(adjMat) < min or np.max(adjMat) > max:
-            sys.exit(("some entries are not between", min, "and", max))
+
+        # Dtype-aware symmetry tolerance
+        eps = np.finfo(adjMat.dtype).eps
+        # scale with dimension; use built-in max() safely
+        tol = 10.0 * eps * builtins.max(shape) if 'builtins' in globals() else 10.0 * eps * max(shape)
+        # If you prefer to avoid builtins detection, simply:
+        # tol = 10.0 * eps * max(shape)
+
+        max_asym = np.max(np.abs(adjMat - adjMat.T))
+        if max_asym > tol:
+            sys.exit(f"adjacency is not symmetric (max asymmetry={max_asym:.3e}, tol={tol:.3e})")
+
+        a_min = np.min(adjMat)
+        a_max = np.max(adjMat)
+        if a_min < min_val or a_max > max_val:
+            sys.exit(("some entries are not between", min_val, "and", max_val))
 
     @staticmethod
     def TomSimilarityFromAdj(adjMat, TOMDenom, TOMType):
@@ -1188,7 +1260,7 @@ class WGCNA(GeneExp):
         min = 0
         if TOMTypeC == 1:
             min = -1
-        WGCNA.checkAdjMat(adjMat, min=min, max=1)
+        WGCNA.checkAdjMat(adjMat, min_val=min, max_val=1)
         np.nan_to_num(adjMat, copy=False, nan=0)
 
         print(f"{OKCYAN}calculating TOM similarity matrix ...{ENDC}")
@@ -2830,6 +2902,7 @@ class WGCNA(GeneExp):
 
         # 1) Calculate correlations
         datTraits = self.getDatTraits(metaData)
+        datTraits = datTraits.apply(pd.to_numeric, errors='raise')
         moduleTraitCor = pd.DataFrame(index=self.MEs.columns, columns=datTraits.columns, dtype="float")
         moduleTraitPvalue = pd.DataFrame(index=self.MEs.columns, columns=datTraits.columns, dtype="float")
 
